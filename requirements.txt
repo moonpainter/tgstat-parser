@@ -1,0 +1,4 @@
+flask
+undetected-chromedriver
+beautifulsoup4
+lxml
