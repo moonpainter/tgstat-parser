@@ -1,38 +1,30 @@
 from flask import Flask, request, jsonify
 from bs4 import BeautifulSoup
-import undetected_chromedriver as uc
-from selenium.webdriver.chrome.options import Options
-import time
+import requests
 
 app = Flask(__name__)
 
-@app.route('/')
-def index():
-    return "✅ TGStat Parser работает!"
-
-@app.route('/parse', methods=['POST'])
+@app.route("/parse", methods=["POST"])
 def parse():
-    data = request.get_json()
-    url = data.get('url')
-    if not url:
-        return jsonify({'error': 'Не передан параметр url'}), 400
-
-    options = Options()
-    options.add_argument('--headless=new')
-    options.add_argument('--no-sandbox')
-    options.add_argument('--disable-dev-shm-usage')
-
-    driver = uc.Chrome(options=options)
-
     try:
-        driver.get(url)
-        time.sleep(6)
-        html = driver.page_source
-        soup = BeautifulSoup(html, "lxml")
+        data = request.get_json()
+        url = data.get("url")
+
+        if not url:
+            return jsonify({"error": "No URL provided"}), 400
+
+        headers = {
+            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)"
+        }
+
+        response = requests.get(url, headers=headers)
+        response.raise_for_status()
+
+        soup = BeautifulSoup(response.text, "lxml")
 
         # Название канала
-        title = soup.find("h1", class_=lambda c: c and "text-dark" in c)
-        title_text = title.get_text(strip=True) if title else ""
+        title_tag = soup.find("h1", class_=lambda c: c and "text-dark" in c)
+        title = title_tag.get_text(strip=True) if title_tag else ""
 
         # Ссылка на Telegram
         link_tag = soup.find("a", href=lambda h: h and h.startswith("https://t.me/"))
@@ -59,15 +51,10 @@ def parse():
             description = "\n".join(filter(None, [line.strip() for line in parts])).strip()
 
         return jsonify({
-            "title": title_text,
+            "title": title,
             "telegram_link": tg_link,
             "description": description
         })
 
     except Exception as e:
         return jsonify({"error": str(e)}), 500
-    finally:
-        driver.quit()
-
-if __name__ == '__main__':
-    app.run(host='0.0.0.0', port=8080)
